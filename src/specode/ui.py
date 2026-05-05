@@ -70,13 +70,9 @@ class TerminalUI:
         table.add_column(ratio=1)
         table.add_column(ratio=1)
         table.add_column(ratio=1)
-        table.add_column(ratio=1)
-        table.add_column(ratio=1)
         table.add_row(
             self._affordance("/spec", "task"),
             self._affordance("/steering", "docs"),
-            self._affordance("/status", "state"),
-            self._affordance("/permissions", "policy"),
             self._affordance("/exit", "leave"),
         )
         return table

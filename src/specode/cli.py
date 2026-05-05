@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 import sys
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from typing import Callable
@@ -20,17 +20,14 @@ from specode.artifacts import (
 from specode.commands import CommandCatalog, default_command_catalog
 from specode.completion import FileCandidate, complete
 from specode.interactive import PromptConfig, run_interactive_shell
-from specode.pydantic_runtime import PydanticAgentRuntime, PydanticRuntimeConfig
 from specode.runtime import (
-    AgentRuntime,
     ChatRequest,
     ChatRuntime,
-    FakeAgentRuntime,
     FakeChatRuntime,
 )
-from specode.schemas import FileOperationSummary
+from specode.steering import build_steering_docs
 from specode.ui import TerminalUI
-from specode.workflow import WorkflowEngine, WorkflowTransition
+from specode.workflow import WorkflowEngine
 
 
 class RouteKind(str, Enum):
@@ -56,16 +53,6 @@ class RouteResult:
 
 class CommandRouter:
     """Route ordinary chat and slash commands without live LLM side effects."""
-
-    _WORKFLOW_COMMANDS = frozenset(
-        {
-            "status",
-            "approve",
-            "revise",
-            "cancel",
-            "run",
-        }
-    )
 
     def __init__(
         self,
@@ -120,16 +107,6 @@ class CommandRouter:
         if command == "exit":
             return RouteResult(RouteKind.EXIT, "Session ended.", command=command)
 
-        if command == "permissions":
-            return RouteResult(
-                RouteKind.COMMAND,
-                (
-                    "Permissions placeholder: local policy controls are not wired yet. "
-                    "Current effective mode: read-only planning."
-                ),
-                command=command,
-            )
-
         if command == "spec":
             if self.store is None or self.workflow is None:
                 detail = f" Received: {argument}" if argument else ""
@@ -146,9 +123,6 @@ class CommandRouter:
         if command == "steering":
             return self._route_steering(argument)
 
-        if command in self._WORKFLOW_COMMANDS:
-            return self._route_workflow_command(command, argument)
-
         return self._placeholder_result(command, argument)
 
     def _route_spec(self, argument: str) -> RouteResult:
@@ -159,8 +133,9 @@ class CommandRouter:
                 command="spec",
             )
 
-        if self._looks_like_markdown_path(argument):
-            return self._route_spec_file(argument)
+        normalized_file_argument = self._normalize_file_reference_argument(argument)
+        if self._looks_like_markdown_path(normalized_file_argument):
+            return self._route_spec_file(normalized_file_argument)
 
         task_name = self.workflow.derive_task_slug(argument)
         transition = self.workflow.start(task_name, argument)
@@ -242,145 +217,31 @@ class CommandRouter:
                 command="steering",
             )
 
-        created = self.store.ensure_steering_docs()
-        created_docs = [doc for doc, was_created in created.items() if was_created]
-        existing_docs = [doc for doc, was_created in created.items() if not was_created]
+        statuses = self.store.ensure_steering_docs(
+            build_steering_docs(self.store.workspace_root)
+        )
+        created_docs = [doc for doc, status in statuses.items() if status == "created"]
+        updated_docs = [doc for doc, status in statuses.items() if status == "updated"]
+        preserved_docs = [doc for doc, status in statuses.items() if status == "preserved"]
 
-        if created_docs and existing_docs:
-            message = (
-                "Steering docs ready. Created: "
-                f"{', '.join(created_docs)}. Preserved existing: {', '.join(existing_docs)}."
-            )
-        elif created_docs:
-            message = f"Created steering docs: {', '.join(created_docs)}."
+        message_parts: list[str] = []
+        if created_docs:
+            message_parts.append(f"Created from repository scan: {', '.join(created_docs)}.")
+        if updated_docs:
+            message_parts.append(f"Refreshed default placeholders: {', '.join(updated_docs)}.")
+        if preserved_docs:
+            message_parts.append(f"Preserved existing: {', '.join(preserved_docs)}.")
+
+        if message_parts:
+            message = "Steering docs ready. " + " ".join(message_parts)
         else:
-            message = f"Steering docs already exist: {', '.join(existing_docs)}."
+            message = "Steering docs already exist."
 
         return RouteResult(
             RouteKind.COMMAND,
             message,
             command="steering",
             creates_sdd_artifacts=False,
-        )
-
-    def _route_workflow_command(self, command: str, argument: str) -> RouteResult:
-        if self.workflow is None:
-            return self._placeholder_result(command, argument)
-
-        if command == "status":
-            if argument:
-                return RouteResult(
-                    RouteKind.COMMAND,
-                    "Usage: /status",
-                    command=command,
-                )
-            return self._workflow_result(command, self.workflow.status_latest())
-
-        if command == "approve":
-            if argument:
-                return RouteResult(
-                    RouteKind.COMMAND,
-                    "Usage: /approve",
-                    command=command,
-                )
-            return self._workflow_result(command, self.workflow.approve_latest())
-
-        if command == "revise":
-            return self._workflow_result(
-                command,
-                self.workflow.revise_latest(argument),
-            )
-
-        if command == "cancel":
-            return self._workflow_result(
-                command,
-                self.workflow.cancel_latest(argument or None),
-            )
-
-        if command == "run":
-            return self._route_run(argument)
-
-        return RouteResult(
-            RouteKind.UNKNOWN,
-            f"Unknown slash command: /{command}",
-            command=command,
-        )
-
-    def _route_run(self, argument: str) -> RouteResult:
-        if self.workflow is None:
-            return self._placeholder_result("run", argument)
-
-        scenario = argument.strip() or "fake"
-        if scenario not in {
-            "fake",
-            "live",
-            "fake-tester-fail",
-            "fake-reviewer-changes",
-            "fake-policy-block",
-        }:
-            return RouteResult(
-                RouteKind.COMMAND,
-                (
-                    "Usage: /run [fake|live|fake-tester-fail|fake-reviewer-changes|"
-                    "fake-policy-block]"
-                ),
-                command="run",
-            )
-
-        task_name = self.workflow.latest_task_name()
-        if task_name is None:
-            return RouteResult(
-                RouteKind.COMMAND,
-                "No /spec tasks found. Start one with /spec <task description>.",
-                command="run",
-            )
-
-        result = self.workflow.run_role_pipeline(
-            task_name,
-            runtime=_runtime_for_scenario(scenario, self.store.workspace_root),
-            file_summaries=_file_summaries_for_scenario(scenario),
-        )
-        run_ids = ", ".join(record.run_id for record in result.run_records) or "none"
-        events = ", ".join(result.events)
-        return RouteResult(
-            RouteKind.COMMAND,
-            (
-                f"Pipeline for '{task_name}': {result.message} "
-                f"Stage: {result.state.current_stage}. Status: {result.state.status}. "
-                f"Runs: {run_ids}. Events: {events}. "
-                f"Next: {result.recommended_next_step}"
-            ),
-            command="run",
-        )
-
-    def _workflow_result(
-        self,
-        command: str,
-        transition: WorkflowTransition | None,
-    ) -> RouteResult:
-        if transition is None:
-            return RouteResult(
-                RouteKind.COMMAND,
-                "No /spec tasks found. Start one with /spec <task description>.",
-                command=command,
-            )
-
-        verbs = {
-            "status": "Status",
-            "approve": "Approval",
-            "revise": "Revision",
-            "cancel": "Cancel",
-        }
-        prefix = verbs[command]
-        state = transition.state
-        return RouteResult(
-            RouteKind.COMMAND,
-            (
-                f"{prefix} for '{state.task_name}': {transition.message} "
-                f"Stage: {transition.next_stage}. Status: {state.status}. "
-                f"Next: {transition.recommended_next_step}"
-            ),
-            command=command,
         )
 
     def _placeholder_result(self, command: str, argument: str) -> RouteResult:
@@ -397,6 +258,11 @@ class CommandRouter:
     def _looks_like_markdown_path(self, argument: str) -> bool:
         candidate = Path(argument)
         return candidate.suffix.lower() == ".md"
+
+    def _normalize_file_reference_argument(self, argument: str) -> str:
+        if not argument.startswith("@"):
+            return argument
+        return argument[1:].replace("\\ ", " ")
 
 
 app = typer.Typer(
@@ -428,146 +294,6 @@ def _default_chat_runtime() -> ChatRuntime:
         return FakeChatRuntime()
 
     return OpenAIChatRuntime(PydanticRuntimeConfig.from_env(dotenv_path=Path.cwd() / ".env"))
-
-
-def _runtime_for_scenario(
-    scenario: str,
-    workspace_root: Path | None = None,
-) -> AgentRuntime:
-    if scenario == "live":
-        root = workspace_root or Path.cwd()
-        config = PydanticRuntimeConfig.from_env(dotenv_path=root / ".env")
-        try:
-            config = replace(config, workspace_root=root)
-        except TypeError:
-            pass
-        return PydanticAgentRuntime(
-            config
-        )
-    return _fake_runtime_for_scenario(scenario)
-
-
-def _fake_runtime_for_scenario(scenario: str) -> FakeAgentRuntime:
-    if scenario == "fake-tester-fail":
-        return FakeAgentRuntime(
-            {
-                "tester": [
-                    _validation_fail("missing contract coverage"),
-                    _validation_pass(),
-                ]
-            }
-        )
-
-    if scenario == "fake-reviewer-changes":
-        return FakeAgentRuntime(
-            {
-                "reviewer": [
-                    _review_changes("review found stale validation claim"),
-                    _review_pass(),
-                ]
-            }
-        )
-
-    if scenario == "fake-policy-block":
-        return FakeAgentRuntime(
-            {
-                "developer": _developer_blocked(
-                    "Policy blocked file mutation: write denied by read-only policy."
-                )
-            }
-        )
-
-    return FakeAgentRuntime()
-
-
-def _file_summaries_for_scenario(
-    scenario: str,
-) -> tuple[FileOperationSummary, ...]:
-    if scenario != "fake-policy-block":
-        return ()
-    return (
-        FileOperationSummary(
-            operation="update_file",
-            path="src/policy_blocked.py",
-            status="blocked",
-            action="updated",
-            changed=False,
-            blocker="Policy blocked file mutation: write denied by read-only policy.",
-        ),
-    )
-
-
-def _developer_blocked(blocker: str) -> dict[str, object]:
-    return {
-        "task": "Fake role pipeline",
-        "result": "blocked",
-        "files_changed": [],
-        "checks_run": [],
-        "interface_impact": "none",
-        "contract_coverage": "Developer stopped before mutation because policy blocked the file operation.",
-        "suggested_split": "none",
-        "suggested_manager_action": "mark_blocked",
-        "blocker": blocker,
-        "notes": [],
-    }
-
-
-def _validation_pass() -> dict[str, object]:
-    return {
-        "task": "Fake role pipeline",
-        "result": "pass",
-        "tests_run": ["fake pytest"],
-        "contract_interface_coverage": "pipeline behavior covered",
-        "findings": [],
-        "test_changes": [],
-        "suggested_follow_up_task": "none",
-        "suggested_manager_action": "run_reviewer",
-        "blocker": "none",
-        "notes": [],
-    }
-
-
-def _validation_fail(finding: str) -> dict[str, object]:
-    return {
-        "task": "Fake role pipeline",
-        "result": "fail",
-        "tests_run": ["fake pytest"],
-        "contract_interface_coverage": "failure routed to repair",
-        "findings": [finding],
-        "test_changes": [],
-        "suggested_follow_up_task": "none",
-        "suggested_manager_action": "run_developer",
-        "blocker": "none",
-        "notes": [],
-    }
-
-
-def _review_pass() -> dict[str, object]:
-    return {
-        "task": "Fake role pipeline",
-        "result": "pass",
-        "findings": [],
-        "interface_contract_findings": [],
-        "scope_design_alignment": "aligned",
-        "risk_level": "low",
-        "suggested_manager_action": "complete_task",
-        "blocker": "none",
-        "notes": [],
-    }
-
-
-def _review_changes(finding: str) -> dict[str, object]:
-    return {
-        "task": "Fake role pipeline",
-        "result": "changes_requested",
-        "findings": [finding],
-        "interface_contract_findings": [],
-        "scope_design_alignment": "repair needed inside approved scope",
-        "risk_level": "medium",
-        "suggested_manager_action": "run_developer",
-        "blocker": "none",
-        "notes": [],
-    }
 
 
 def run_interactive(

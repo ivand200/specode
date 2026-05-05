@@ -30,8 +30,6 @@ def test_user_facing_sdd_commands_create_only_explicit_artifacts(tmp_path: Path)
         "\n".join(
             [
                 "/spec add password reset email flow",
-                "/status",
-                "/approve",
                 "/spec incoming/auth-reset/request.md",
                 "/exit",
                 "",
@@ -44,7 +42,6 @@ def test_user_facing_sdd_commands_create_only_explicit_artifacts(tmp_path: Path)
     text_state = read_state(text_task)
     file_provenance = read_provenance(file_task / "task.md")
     source_text = source.read_text(encoding="utf-8")
-    normalized_stdout = normalize_output(sdd.stdout)
 
     assert sdd.returncode == 0
     assert text_task.joinpath("state.json").exists()
@@ -54,20 +51,16 @@ def test_user_facing_sdd_commands_create_only_explicit_artifacts(tmp_path: Path)
     assert file_provenance["kind"] == "file"
     assert file_provenance["source_path"] == "incoming/auth-reset/request.md"
     assert file_provenance["source_sha256"] == hash_text(source_text)
-    assert "Status for 'add-password-reset-email-flow'" in normalized_stdout
-    assert "Next: Create or approve task.md before design, tasks, or implementation." in (
-        normalized_stdout
-    )
-    assert text_state["artifacts"]["task"] == "approved"
-    assert text_state["current_stage"] == "decision"
-    assert text_state["status"] == "in-progress"
+    assert text_state["artifacts"]["task"] == "pending-approval"
+    assert text_state["current_stage"] == "task"
+    assert text_state["status"] == "pending-approval"
     assert not (tmp_path / "tasks" / "help-me-inspect-this-repo").exists()
     assert not (tmp_path / "steering").exists()
 
     steering = run_packaged_specode(tmp_path, "/steering\n/exit\n")
 
     assert steering.returncode == 0
-    assert "Created steering docs: product.md, tech.md, structure.md." in normalize_output(
+    assert "Created from repository scan: product.md, tech.md, structure.md." in normalize_output(
         steering.stdout
     )
     assert (tmp_path / "steering" / "product.md").exists()

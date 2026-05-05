@@ -30,8 +30,7 @@ class Catalog:
 CATALOG = Catalog(
     (
         Command("spec", "Create or continue a spec workflow."),
-        Command("steering", "Create or update steering documents."),
-        Command("status", "Show current workflow status."),
+        Command("steering", "Create missing/default steering documents."),
         Command("exit", "Leave SpeCode.", aliases=("quit",)),
         Command("debug", "Internal diagnostic command.", hidden=True),
     )
@@ -45,14 +44,14 @@ def labels(suggestions: tuple) -> tuple[str, ...]:
 def test_slash_root_suggests_visible_commands() -> None:
     suggestions = complete("/", catalog=CATALOG)
 
-    assert labels(suggestions) == ("/spec", "/steering", "/status", "/exit")
+    assert labels(suggestions) == ("/spec", "/steering", "/exit")
     assert all(suggestion.kind == SuggestionKind.COMMAND for suggestion in suggestions)
 
 
 def test_slash_prefix_filters_commands_and_replaces_active_token() -> None:
     suggestions = complete("/st", catalog=CATALOG)
 
-    assert labels(suggestions) == ("/steering", "/status")
+    assert labels(suggestions) == ("/steering",)
     assert {
         (suggestion.replacement_start, suggestion.replacement_end)
         for suggestion in suggestions

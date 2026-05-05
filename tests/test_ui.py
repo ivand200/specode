@@ -25,8 +25,10 @@ def test_intro_renders_terminal_silver_start_screen() -> None:
     assert "Terminal Silver" in output
     assert all(
         command in output
-        for command in ["/spec", "/steering", "/status", "/permissions", "/exit"]
+        for command in ["/spec", "/steering", "/exit"]
     )
+    assert "/status" not in output
+    assert "/permissions" not in output
     assert output.count("\n") > 3
 
 

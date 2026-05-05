@@ -59,6 +59,20 @@ def test_spec_file_creates_task_artifacts_with_file_provenance(tmp_path: Path) -
     assert provenance["source_sha256"] == hash_text(source.read_text(encoding="utf-8"))
 
 
+def test_spec_accepts_completed_file_reference_token(tmp_path: Path) -> None:
+    source = tmp_path / "incoming" / "auth-reset" / "request.md"
+    source.parent.mkdir(parents=True)
+    source.write_text("# Add password reset email flow\n\nSend reset links.\n", encoding="utf-8")
+    router = CommandRouter(tmp_path)
+
+    result = router.route("/spec @incoming/auth-reset/request.md")
+
+    paths = ArtifactStore(tmp_path).task_paths("auth-reset")
+    provenance = read_provenance(paths.task)
+    assert "Created /spec task 'auth-reset'" in result.text
+    assert provenance["source_path"] == "incoming/auth-reset/request.md"
+
+
 def test_spec_file_resumes_without_reimporting_task_provenance(tmp_path: Path) -> None:
     source = tmp_path / "incoming" / "auth-reset" / "request.md"
     source.parent.mkdir(parents=True)

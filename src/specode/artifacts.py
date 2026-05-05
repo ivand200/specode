@@ -6,6 +6,7 @@ import json
 import os
 import re
 import tempfile
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from hashlib import sha256
@@ -194,23 +195,38 @@ class ArtifactStore:
         self.steering_root.mkdir(parents=True, exist_ok=True)
         return self.steering_root
 
-    def ensure_steering_docs(self) -> dict[str, bool]:
-        """Create missing steering docs and report which files were created.
+    def ensure_steering_docs(
+        self,
+        contents: Mapping[str, str] | None = None,
+    ) -> dict[str, str]:
+        """Create or refresh missing/default steering docs.
 
         Existing docs are preserved so /steering does not overwrite durable
         project context gathered by the user or another worker.
         """
 
         self.ensure_steering_dir()
-        created: dict[str, bool] = {}
+        statuses: dict[str, str] = {}
         for doc_name in STEERING_DOC_ORDER:
             path = self.steering_doc_path(doc_name)
+            desired_content = (
+                contents.get(doc_name, DEFAULT_STEERING_DOCS[doc_name])
+                if contents is not None
+                else DEFAULT_STEERING_DOCS[doc_name]
+            )
             if path.exists():
-                created[doc_name] = False
+                existing_content = self.read_text(path)
+                if _is_default_steering_doc(doc_name, existing_content) and (
+                    desired_content.strip() != existing_content.strip()
+                ):
+                    self.write_text(path, desired_content)
+                    statuses[doc_name] = "updated"
+                else:
+                    statuses[doc_name] = "preserved"
                 continue
-            self.write_text(path, DEFAULT_STEERING_DOCS[doc_name])
-            created[doc_name] = True
-        return created
+            self.write_text(path, desired_content)
+            statuses[doc_name] = "created"
+        return statuses
 
     def steering_doc_path(self, doc_name: str) -> Path:
         self._validate_member(doc_name, STEERING_DOCS, "steering doc")
@@ -452,6 +468,10 @@ def format_imported_task_markdown(
 
 def _utc_timestamp() -> str:
     return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def _is_default_steering_doc(doc_name: str, content: str) -> bool:
+    return content.strip() == DEFAULT_STEERING_DOCS[doc_name].strip()
 
 
 def _display_source_path(path: Path, workspace_root: Path) -> str:

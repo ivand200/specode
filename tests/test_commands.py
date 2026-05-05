@@ -13,12 +13,6 @@ def test_default_catalog_exposes_required_visible_commands_in_order() -> None:
     assert [command.slash_name for command in catalog.visible_commands()] == [
         "/spec",
         "/steering",
-        "/status",
-        "/approve",
-        "/revise",
-        "/cancel",
-        "/run",
-        "/permissions",
         "/exit",
     ]
 
@@ -48,10 +42,6 @@ def test_accepts_args_metadata_tracks_commands_that_take_arguments() -> None:
     catalog = default_command_catalog()
 
     assert catalog.require("/spec").accepts_args
-    assert catalog.require("/revise").accepts_args
-    assert catalog.require("/cancel").accepts_args
-    assert catalog.require("/run").accepts_args
-    assert not catalog.require("/status").accepts_args
     assert not catalog.require("/exit").accepts_args
 
 
@@ -84,17 +74,17 @@ def test_hidden_commands_are_available_but_excluded_from_visible_commands() -> N
 
 def test_command_definition_normalizes_case_and_slashes() -> None:
     command = CommandDefinition(
-        name="/Status",
-        aliases=("/ST",),
-        description="Check state.",
-        usage="/status",
+        name="/Visible",
+        aliases=("/V",),
+        description="Visible command.",
+        usage="/visible",
         category="workflow",
     )
 
-    assert command.name == "status"
-    assert command.aliases == ("st",)
-    assert command.matches("/ST")
-    assert command.slash_aliases == ("/st",)
+    assert command.name == "visible"
+    assert command.aliases == ("v",)
+    assert command.matches("/V")
+    assert command.slash_aliases == ("/v",)
 
 
 def test_catalog_rejects_duplicate_names_or_aliases() -> None:

@@ -134,51 +134,9 @@ def default_command_catalog() -> CommandCatalog:
             ),
             CommandDefinition(
                 name="steering",
-                description="Create missing project steering docs.",
+                description="Create missing/default project steering docs.",
                 usage="/steering",
                 category="workflow",
-            ),
-            CommandDefinition(
-                name="status",
-                description="Show the latest task state.",
-                usage="/status",
-                category="workflow",
-            ),
-            CommandDefinition(
-                name="approve",
-                description="Approve the latest pending artifact.",
-                usage="/approve",
-                category="workflow",
-            ),
-            CommandDefinition(
-                name="revise",
-                description="Request changes on the latest task.",
-                usage="/revise <revision notes>",
-                category="workflow",
-                accepts_args=True,
-            ),
-            CommandDefinition(
-                name="cancel",
-                description="Block the latest task without deleting artifacts.",
-                usage="/cancel [reason]",
-                category="workflow",
-                accepts_args=True,
-            ),
-            CommandDefinition(
-                name="run",
-                description="Run the role pipeline for the latest task.",
-                usage=(
-                    "/run [fake|live|fake-tester-fail|fake-reviewer-changes|"
-                    "fake-policy-block]"
-                ),
-                category="workflow",
-                accepts_args=True,
-            ),
-            CommandDefinition(
-                name="permissions",
-                description="Show local permission policy status.",
-                usage="/permissions",
-                category="session",
             ),
             CommandDefinition(
                 name="exit",

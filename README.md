@@ -6,7 +6,7 @@ SpeCode is an opinionated Python CLI coding agent with an explicit Spec-Driven D
 
 - Routes ordinary text to the configured OpenAI-compatible chat model.
 - Uses `/spec` to create resumable task artifacts under `tasks/<task-name>/`.
-- Uses `/steering` to create durable project context under `steering/`.
+- Uses `/steering` to scan the repository and create durable project context under `steering/`.
 - Drives approved work through `developer -> tester -> reviewer` role execution.
 - Persists compact role run records under `tasks/<task-name>/runs/`.
 - Keeps automated tests deterministic with fake or mocked model responses.
@@ -14,24 +14,94 @@ SpeCode is an opinionated Python CLI coding agent with an explicit Spec-Driven D
 ## Requirements
 
 - Python 3.11 or newer.
-- `uv` for environment and test commands.
+- `uv` for local development, test commands, and the recommended one-shot run path.
+- `git` when installing directly from GitHub.
 - An OpenAI-compatible API key for live chat or live role execution.
 
-## Install
+## Quick Start
 
-From the repo root:
+Run SpeCode directly from GitHub without cloning the repository:
+
+```bash
+uvx --from git+https://github.com/ivand200/specode.git specode
+```
+
+For live chat, provide runtime configuration first:
+
+```bash
+export OPENAI_API_KEY=...
+export CHAT_MODEL=gpt-5.4-mini
+export OPENAI_REASONING_EFFORT=xhigh
+uvx --from git+https://github.com/ivand200/specode.git specode
+```
+
+To work on SpeCode locally:
+
+```bash
+git clone https://github.com/ivand200/specode.git
+cd specode
+uv sync
+uv run specode
+```
+
+## Install From GitHub
+
+Use one of these options depending on how you want to run the CLI.
+
+One-shot run with `uvx`:
+
+```bash
+uvx --from git+https://github.com/ivand200/specode.git specode
+```
+
+Install as a persistent CLI tool with `uv`:
+
+```bash
+uv tool install git+https://github.com/ivand200/specode.git
+specode
+```
+
+Install in an isolated tool environment with `pipx`:
+
+```bash
+pipx install git+https://github.com/ivand200/specode.git
+specode
+```
+
+Install from a local clone for development:
 
 ```bash
 uv sync
+uv run specode
 ```
 
-Run the CLI in development:
+Upgrade a persistent `uv` tool install:
+
+```bash
+uv tool upgrade specode
+```
+
+If you installed with `pipx`, upgrade with:
+
+```bash
+pipx upgrade specode
+```
+
+## Run SpeCode
+
+From an installed CLI:
+
+```bash
+specode
+```
+
+From a local clone:
 
 ```bash
 uv run specode
 ```
 
-Run tests:
+Run tests from a local clone:
 
 ```bash
 uv run pytest
@@ -50,7 +120,7 @@ OPENAI_REASONING_EFFORT=xhigh
 
 Configuration notes:
 
-- `OPENAI_API_KEY` is required for live chat and `/run live`.
+- `OPENAI_API_KEY` is required for live chat and live role execution.
 - `CHAT_MODEL` defaults to `gpt-5.4-mini` when unset.
 - `OPENAI_REASONING_EFFORT` defaults to `xhigh` when unset.
 - Supported reasoning-effort values are `none`, `minimal`, `low`, `medium`, `high`, and `xhigh`; actual model compatibility is provider-specific.
@@ -76,25 +146,17 @@ uv run specode
 /spec <task description>
 /spec <path-to-task.md>
 /steering
-/status
-/approve
-/revise <instruction>
-/cancel [reason]
-/run fake
-/run live
 /exit
+/quit
 ```
 
 Routing rules:
 
 - Plain input that does not start with `/`, `@`, or `!` is normal chat.
-- `/` commands are workflow/meta controls.
+- Public `/` commands are reserved for session and mode switches only.
 - `@` and `!` are reserved for future explicit file-context and shell-command modes, and are not silently sent to chat.
-- `/run fake` uses deterministic fake role returns.
-- `/run live` uses the OpenAI/Pydantic runtime and may make real model requests.
-  Live role runs carry an explicit automation policy: `approved` executes only
-  policy-allowed operations, while `yolo` is reserved for approved workspace
-  automation with separate safety gates.
+- `/steering` scans local repository evidence such as README files, package manifests, entry points, source directories, and tests before writing missing/default steering docs.
+- Approval, revision, status, cancellation, and role execution are manager workflow intents, not public slash commands.
 
 ## SDD Workflow
 
@@ -127,6 +189,15 @@ Rules of thumb:
 - If a task crosses architecture, data, auth, external APIs, security, privacy, performance, or operational risk, insert research before design.
 - If scope changes during implementation, mark artifacts stale and return to the right planning stage instead of silently continuing.
 
+## Usage Best Practices
+
+- Start with plain chat for quick questions, code explanation, and brainstorming.
+- Use `/spec` when the work should leave a durable trail: features, bugfixes, project setup, workflow changes, or anything that needs review.
+- Keep `/steering` focused on stable project facts. Put task-specific decisions in `tasks/<task-name>/`, not in steering docs.
+- Approve planning artifacts before running implementation. Stale artifacts should be revised before work continues.
+- Use normal chat to ask for status, approval, revision, cancellation, or implementation.
+- Review `tasks/<task-name>/state.json` when resuming work after a break.
+
 ## Role Runtime
 
 SpeCode has three structured role returns:
@@ -144,10 +215,11 @@ Run records persist only validated role returns, compact command summaries, comp
 ## Safety And Privacy Best Practices
 
 - Do not commit `.env` or real credentials.
-- Keep secrets in process environment only.
-- Use `.env.example` for documented configuration.
-- Prefer `/run fake` and mocked tests for routine validation.
-- Use `/run live` only when you intentionally want external model calls.
+- Prefer shell environment variables or an uncommitted workspace `.env` file for secrets.
+- Use `.env.example` for documented, non-secret configuration names and defaults.
+- Let exported environment variables override `.env` when running in CI or shared shells.
+- Prefer fake runtimes and mocked tests for routine validation.
+- Use live role execution only when you intentionally want external model calls.
 - Keep file, command, and controlled web-search operations behind SpeCode policy/runtime boundaries.
 - Treat file deletion and destructive commands as high-risk operations.
 - Use reviewer edits only for small clear issues inside the approved workspace scope.
@@ -157,11 +229,13 @@ Run records persist only validated role returns, compact command summaries, comp
 ## Development Best Practices
 
 - Follow existing module boundaries before adding abstractions.
+- Use `uv run ...` for project Python commands so tests and local runs use the locked environment.
 - Keep workflow routing deterministic; model outputs are advice after schema validation.
 - Add behavior tests around public contracts and workflow transitions.
 - Use E2E tests for major workflow boundaries.
 - Keep mocked model fixtures sanitized and deterministic.
 - Prefer focused tests while editing, then run the full suite before handoff.
+- Keep Markdown links relative so repository docs work after cloning.
 
 Useful commands:
 

@@ -85,9 +85,9 @@ class RecordingChatRuntime(ChatRuntime):
 
 def test_completer_calls_engine_with_document_text_and_cursor() -> None:
     suggestion = FakeSuggestion(
-        label="/status",
-        insert_text="/status",
-        description="Show current task status",
+        label="/steering",
+        insert_text="/steering",
+        description="Create missing/default steering docs",
         kind="command",
         replacement_start=0,
         replacement_end=3,
@@ -102,11 +102,11 @@ def test_completer_calls_engine_with_document_text_and_cursor() -> None:
     assert engine.calls == [("/st", 3)]
     assert len(completions) == 1
     completion = completions[0]
-    assert completion.text == "/status"
+    assert completion.text == "/steering"
     assert completion.start_position == -3
-    assert to_plain_text(completion.display) == "/status"
+    assert to_plain_text(completion.display) == "/steering"
     assert to_plain_text(completion.display_meta) == (
-        "command - Show current task status"
+        "command - Create missing/default steering docs"
     )
 
 

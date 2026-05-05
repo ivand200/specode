@@ -53,28 +53,11 @@ def test_reserved_prefixes_do_not_route_to_chat_or_create_artifacts(
     assert_no_sdd_artifacts(tmp_path)
 
 
-def test_permissions_routes_to_placeholder_without_artifacts(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.chdir(tmp_path)
-    router = CommandRouter()
-
-    result = router.route("/permissions")
-
-    assert result.command == "permissions"
-    assert "Permissions placeholder" in result.text
-    assert_no_sdd_artifacts(tmp_path)
-
-
 @pytest.mark.parametrize(
     ("line", "command"),
     [
         ("/spec add password reset", "spec"),
         ("/steering", "steering"),
-        ("/status", "status"),
-        ("/approve", "approve"),
-        ("/revise clarify acceptance criteria", "revise"),
-        ("/cancel", "cancel"),
     ],
 )
 def test_placeholder_slash_commands_are_recognized_without_creating_artifacts(
@@ -86,6 +69,30 @@ def test_placeholder_slash_commands_are_recognized_without_creating_artifacts(
     result = router.route(line)
 
     assert result.command == command
+    assert_no_sdd_artifacts(tmp_path)
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "/status",
+        "/approve",
+        "/revise clarify acceptance criteria",
+        "/cancel",
+        "/run fake",
+        "/permissions",
+    ],
+)
+def test_removed_workflow_slash_commands_are_not_public(
+    line: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    router = CommandRouter()
+
+    result = router.route(line)
+
+    assert result.kind == RouteKind.UNKNOWN
+    assert "Unknown slash command" in result.text
     assert_no_sdd_artifacts(tmp_path)
 
 
@@ -111,11 +118,11 @@ def test_interactive_shell_routes_lines_until_exit(
         lambda: chat_runtime,
     )
 
-    result = runner.invoke(app, input="hello\n/permissions\n/exit\n")
+    result = runner.invoke(app, input="hello\n/unknown\n/exit\n")
 
     assert result.exit_code == 0
     assert "mocked chat output" in result.output
-    assert "Permissions placeholder" in result.output
+    assert "Unknown slash command: /unknown" in result.output
     assert chat_runtime.requests == [ChatRequest(message="hello")]
 
 
