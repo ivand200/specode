@@ -1,0 +1,55 @@
+{
+  "developer": {
+    "task": "OpenAI ChatGPT runtime E2E",
+    "result": "ready_for_testing",
+    "files_changed": [
+      "src/specode/pydantic_runtime.py"
+    ],
+    "checks_run": [
+      "uv run pytest tests/e2e/test_openai_chatgpt_runtime.py"
+    ],
+    "interface_impact": "public-contract",
+    "contract_coverage": "Mocked developer response follows the TaskReturn schema.",
+    "suggested_split": null,
+    "suggested_manager_action": "run_tester",
+    "blocker": null,
+    "notes": [
+      "Fixture is sanitized and contains no raw model transcript."
+    ]
+  },
+  "tester": {
+    "task": "OpenAI ChatGPT runtime E2E",
+    "result": "pass",
+    "tests_run": [
+      "uv run pytest tests/e2e/test_openai_chatgpt_runtime.py"
+    ],
+    "contract_interface_coverage": "Mocked tester response follows the ValidationReturn schema.",
+    "findings": [],
+    "test_changes": [],
+    "suggested_follow_up_task": null,
+    "suggested_manager_action": "run_reviewer",
+    "blocker": null,
+    "notes": [
+      "Fixture is deterministic."
+    ]
+  },
+  "reviewer": {
+    "task": "OpenAI ChatGPT runtime E2E",
+    "result": "pass",
+    "findings": [],
+    "interface_contract_findings": [],
+    "scope_design_alignment": "Mocked reviewer response aligns with the approved design.",
+    "risk_level": "medium",
+    "suggested_manager_action": "complete_task",
+    "blocker": null,
+    "notes": [
+      "Fixture is sanitized."
+    ]
+  },
+  "malformed_developer": {
+    "task": "OpenAI ChatGPT runtime E2E",
+    "result": "ready_for_testing",
+    "contract_coverage": "Missing required fields should block.",
+    "suggested_manager_action": "mark_blocked"
+  }
+}

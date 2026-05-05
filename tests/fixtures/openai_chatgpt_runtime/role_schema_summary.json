@@ -1,0 +1,67 @@
+{
+  "developer": {
+    "model": "TaskReturn",
+    "required": [
+      "task",
+      "result",
+      "contract_coverage",
+      "suggested_manager_action"
+    ],
+    "result_values": [
+      "ready_for_testing",
+      "needs_split",
+      "blocked"
+    ],
+    "manager_actions": [
+      "ask_engineer",
+      "run_tester",
+      "split_tasks",
+      "mark_blocked"
+    ]
+  },
+  "tester": {
+    "model": "ValidationReturn",
+    "required": [
+      "task",
+      "result",
+      "contract_interface_coverage",
+      "suggested_manager_action"
+    ],
+    "result_values": [
+      "pass",
+      "fail",
+      "blocked"
+    ],
+    "manager_actions": [
+      "ask_engineer",
+      "run_developer",
+      "run_reviewer",
+      "add_follow_up",
+      "mark_blocked",
+      "mark_done"
+    ]
+  },
+  "reviewer": {
+    "model": "ReviewReturn",
+    "required": [
+      "task",
+      "result",
+      "scope_design_alignment",
+      "risk_level",
+      "suggested_manager_action"
+    ],
+    "result_values": [
+      "pass",
+      "changes_requested",
+      "blocked"
+    ],
+    "manager_actions": [
+      "complete_task",
+      "run_developer",
+      "add_follow_up_task",
+      "refresh_artifacts",
+      "split_task",
+      "ask_user"
+    ]
+  }
+}

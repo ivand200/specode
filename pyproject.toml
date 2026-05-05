@@ -1,0 +1,46 @@
+[build-system]
+requires = ["hatchling>=1.24"]
+build-backend = "hatchling.build"
+
+[project]
+name = "specode"
+version = "0.1.0"
+description = "An opinionated Python CLI coding agent with explicit spec-driven workflows."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [
+  { name = "SpeCode Contributors" }
+]
+keywords = ["cli", "coding-agent", "spec-driven-development"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+]
+dependencies = [
+  "prompt-toolkit>=3.0",
+  "pydantic>=2",
+  "pydantic-ai>=1.0",
+  "typer>=0.12",
+]
+
+[project.scripts]
+specode = "specode:main"
+
+[dependency-groups]
+dev = [
+  "pytest>=8.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-ra"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/specode"]
